@@ -10,7 +10,7 @@ Clinician: [CLINICIAN]
 ---
 
 PRESENTING COMPLAINT (PC):
-[1–2 sentences. Chief complaint in the patient's words or close paraphrase.]
+[1–2 sentences. Chief complaint in the patient's words or close paraphrase. This should also include the duration]
 
 HISTORY OF PRESENTING COMPLAINT (HPC):
 Structure the HPC using the 5 C's framework:
@@ -40,7 +40,17 @@ What prompted them to seek care now. ICE (Ideas, Concerns, Expectations)
 can be embedded here if documented.]
 
 PAST MEDICAL HISTORY (PMH):
-[Numbered list of confirmed diagnoses. Include year if known.]
+[Numbered list of confirmed medical diagnoses. Include year if known.]
+Note: Questions about chronic conditions (e.g. hypertension, diabetes,
+epilepsy, asthma) asked in the present tense ("do you have...") are
+clinical screening for PMH — classify them here regardless of grammatical
+tense. Document confirmed diagnoses and pertinent negatives.
+
+PAST SURGICAL HISTORY (PSH):
+[Numbered list of prior surgeries or procedures. Include year if known.]
+Note: "Have you had surgery?" and equivalent present-tense phrasings
+count as PSH screening. Document confirmed procedures and pertinent
+negatives (e.g. "No previous surgery").
 
 DRUG HISTORY (DH):
 [List format — Drug | Dose | Frequency | Route. Flag any recent changes.]
@@ -79,3 +89,7 @@ PLAN:
 ---
 If any section has no information provided, write "[Not documented]" —
 do not invent or infer clinical details.
+
+
+Format the entire output in Markdown. Use ## for section headers,
+**bold** for field labels, and - for list items.
