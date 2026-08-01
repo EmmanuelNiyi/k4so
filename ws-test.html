@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WebSocket Test</title>
+</head>
+<body style="font-family: monospace; padding: 2rem;">
+
+  <h2>WebSocket Connection Test</h2>
+
+  <p>Status: <span id="status">not connected</span></p>
+
+  <button id="connectBtn">Connect</button>
+  <button id="sendBtn">Send test message</button>
+  <button id="closeBtn">Close</button>
+
+  <h3>Log</h3>
+  <pre id="log" style="background:#eee; padding:1rem; height:200px; overflow-y:auto;"></pre>
+
+  <script>
+    let socket = null;
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+
+    function log(message) {
+      logEl.textContent += message + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    document.getElementById('connectBtn').addEventListener('click', () => {
+      // Change this URL/path to match whatever route you define in FastAPI.
+      socket = new WebSocket('ws://localhost:8000/ws/audio');
+
+      socket.onopen = () => {
+        statusEl.textContent = 'connected';
+        log('Connected.');
+      };
+
+      socket.onmessage = (event) => {
+        log('Received: ' + event.data);
+      };
+
+      socket.onerror = (err) => {
+        log('Error, check console for details.');
+        console.error(err);
+      };
+
+      socket.onclose = () => {
+        statusEl.textContent = 'closed';
+        log('Connection closed.');
+      };
+    });
+
+    document.getElementById('sendBtn').addEventListener('click', () => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send('hello from browser');
+        log('Sent: hello from browser');
+      } else {
+        log('Socket is not open, click Connect first.');
+      }
+    });
+
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      if (socket) {
+        socket.close();
+      }
+    });
+  </script>
+
+</body>
+</html>

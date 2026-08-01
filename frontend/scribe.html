@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClinScribe — Ambient Medical Scribe</title>
+  <script src="scribe.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface:   '#0D1117',
+            panel:     '#161B22',
+            border:    '#21262D',
+            muted:     '#8B949E',
+            label:     '#58A6FF',
+            accent:    '#3FB950',
+            warn:      '#F78166',
+            text:      '#E6EDF3',
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'monospace'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Pulse ring animation for the record button */
+    @keyframes pulse-ring {
+      0%   { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(247,129,102,0.55); }
+      70%  { transform: scale(1);    box-shadow: 0 0 0 14px rgba(247,129,102,0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(247,129,102,0); }
+    }
+    .recording { animation: pulse-ring 1.6s ease-out infinite; }
+
+    /* Blinking cursor at end of live transcript */
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    .cursor::after {
+      content: '▋';
+      display: inline-block;
+      margin-left: 2px;
+      animation: blink 1s step-start infinite;
+      color: #58A6FF;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #21262D; border-radius: 4px; }
+
+    /* Subtle scanline texture on panels */
+    .panel-texture {
+      background-image: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(255,255,255,0.013) 3px,
+        rgba(255,255,255,0.013) 4px
+      );
+    }
+  </style>
+</head>
+
+<body class="bg-surface text-text font-sans h-screen flex flex-col overflow-hidden" x-data="scribeApp()">
+
+  <!-- ══════════════ HEADER ══════════════ -->
+  <header class="flex items-center justify-between px-6 py-3 border-b border-border shrink-0">
+    <div class="flex items-center gap-3">
+      <!-- Logomark: simple cross + waveform -->
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="9" y="1" width="4" height="20" rx="1" fill="#58A6FF" opacity="0.85"/>
+        <rect x="1" y="9" width="20" height="4" rx="1" fill="#58A6FF" opacity="0.85"/>
+      </svg>
+      <span class="font-semibold tracking-tight text-sm text-text">ClinScribe</span>
+      <span class="text-muted text-xs font-mono ml-1">v0.1</span>
+    </div>
+
+    <div class="flex items-center gap-4 text-xs text-muted font-mono">
+      <!-- Status indicator -->
+      <div class="flex items-center gap-1.5">
+        <span
+          class="inline-block w-2 h-2 rounded-full transition-colors duration-300"
+          :class="recording ? 'bg-warn' : 'bg-border'"
+        ></span>
+        <span x-text="recording ? 'Recording' : 'Idle'"></span>
+      </div>
+
+      <!-- Session meta -->
+      <div class="hidden sm:flex items-center gap-4">
+        <span>GOPD · General</span>
+        <span class="text-border">|</span>
+        <span id="clock" class="tabular-nums"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══════════════ MAIN PANELS ══════════════ -->
+  <main class="flex flex-1 overflow-hidden gap-px bg-border">
+
+    <!-- LEFT: Live Transcript -->
+    <section class="flex flex-col bg-panel panel-texture w-1/2 min-w-0">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-mono font-medium text-label uppercase tracking-widest">Transcript</span>
+          <span
+            class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-border text-muted transition-opacity"
+            :class="recording ? 'opacity-100' : 'opacity-0'"
+          >LIVE</span>
+        </div>
+        <span class="text-xs text-muted font-mono">Whisper · base.en</span>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4 text-sm leading-relaxed">
+
+        <!-- Empty state, shown until the first transcript segment arrives -->
+        <p class="text-muted text-xs" x-show="transcript.length === 0">
+          Click "Start recording" to begin. Transcript will appear here as you speak.
+        </p>
+
+        <!-- Real transcript segments, pushed in from the backend over the WebSocket -->
+        <template x-for="(segment, index) in transcript" :key="segment.id">
+          <div class="flex gap-3">
+            <p
+              class="text-text/80"
+              :class="{ 'cursor': recording && index === transcript.length - 1 }"
+              x-text="segment.text"
+            ></p>
+          </div>
+        </template>
+
+      </div>
+    </section>
+
+    <!-- RIGHT: Structured Clinical Note -->
+    <section class="flex flex-col bg-panel panel-texture w-1/2 min-w-0">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-mono font-medium text-accent uppercase tracking-widest">GOPD Note</span>
+          <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-border text-muted">Generating</span>
+        </div>
+        <span class="text-xs text-muted font-mono">Qwen3:8B · Ollama</span>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-5 py-4 font-mono text-xs leading-relaxed space-y-4">
+
+        <!-- Biodata -->
+        <div>
+          <p class="text-label font-medium mb-1">BIODATA</p>
+          <p class="text-muted">Name: <span class="text-text">Oluwaseun Adeyemi</span></p>
+          <p class="text-muted">Age: <span class="text-text">54 years</span></p>
+          <p class="text-muted">Sex: <span class="text-text">Male</span></p>
+          <p class="text-muted">Date: <span class="text-text" id="note-date"></span></p>
+        </div>
+
+        <div class="border-t border-border"></div>
+
+        <!-- Presenting Complaint -->
+        <div>
+          <p class="text-label font-medium mb-1">PRESENTING COMPLAINT</p>
+          <p class="text-text">3-day history of exertional chest tightness with associated dyspnoea.</p>
+        </div>
+
+        <div class="border-t border-border"></div>
+
+        <!-- HPC -->
+        <div>
+          <p class="text-label font-medium mb-1">HISTORY OF PRESENTING COMPLAINT</p>
+          <p class="text-text">Mr. Adeyemi is a 54-year-old male who presents with a 3-day history of chest tightness, described as a pressure sensation localised to the precordium with radiation to the left shoulder. Onset was exertional (climbing stairs). Associated symptoms include mild dyspnoea and diaphoresis during the initial episode. No palpitations, nausea, or syncope reported. Symptoms have not recurred at rest. No prior episodes of similar nature. Previous ECG at an outside facility (1 year ago) reportedly normal.</p>
+        </div>
+
+        <div class="border-t border-border"></div>
+
+        <!-- PMH -->
+        <div>
+          <p class="text-label font-medium mb-1">PAST MEDICAL HISTORY</p>
+          <p class="text-text">1. Hypertension — diagnosed &gt;2 years ago, on treatment.</p>
+        </div>
+
+        <div class="border-t border-border"></div>
+
+        <!-- Medications — actively streaming, cursor visible -->
+        <div>
+          <p class="text-label font-medium mb-1">MEDICATIONS</p>
+          <p class="text-text cursor">1. Amlodipine 5 mg oral once daily</p>
+        </div>
+
+        <!-- Placeholder sections — not yet generated -->
+        <div class="space-y-3 opacity-30">
+          <div class="border-t border-border"></div>
+          <p class="text-muted font-medium">PAST SURGICAL HISTORY</p>
+          <p class="text-muted font-medium">FAMILY HISTORY</p>
+          <p class="text-muted font-medium">SOCIAL HISTORY</p>
+          <p class="text-muted font-medium">SYSTEMS REVIEW</p>
+          <p class="text-muted font-medium">EXAMINATION</p>
+          <p class="text-muted font-medium">INVESTIGATIONS</p>
+          <p class="text-muted font-medium">IMPRESSION</p>
+          <p class="text-muted font-medium">PLAN</p>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ══════════════ RECORD BUTTON ══════════════ -->
+  <footer class="shrink-0 flex flex-col items-center justify-center gap-2 py-5 bg-surface border-t border-border">
+
+    <button
+      @click="toggleRecording()"
+      :class="recording ? 'recording bg-warn/10 border-warn text-warn' : 'bg-panel border-border text-muted hover:border-label hover:text-label'"
+      class="flex items-center gap-2.5 px-6 py-2.5 rounded-full border text-xs font-mono font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-label/40"
+    >
+      <!-- Mic icon -->
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-6.5 9a.5.5 0 0 1 .5.5A6.5 6.5 0 0 0 18.5 10.5a.5.5 0 0 1 1 0A7.5 7.5 0 0 1 12.5 17.94V20h2.5a.5.5 0 0 1 0 1h-6a.5.5 0 0 1 0-1h2.5v-2.06A7.5 7.5 0 0 1 5 10.5a.5.5 0 0 1 .5-.5z"/>
+      </svg>
+      <span x-text="recording ? 'Stop recording' : 'Start recording'"></span>
+    </button>
+
+    <p class="text-[10px] font-mono text-muted/50" x-show="!recording">
+      Audio stays on device — processed by local Whisper
+    </p>
+    <p class="text-[10px] font-mono text-warn/60" x-show="recording" x-cloak>
+      Listening · chunks sent every 3 s
+    </p>
+
+  </footer>
+
+  <script>
+    // Live clock in header
+    function tick() {
+      const el = document.getElementById('clock');
+      if (el) el.textContent = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    // Today's date in the note
+    const noteDate = document.getElementById('note-date');
+    if (noteDate) {
+      noteDate.textContent = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+    }
+  </script>
+</body>
+</html>
